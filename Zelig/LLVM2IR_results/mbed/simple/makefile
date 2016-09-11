@@ -4,7 +4,7 @@
 
 VERBOSE=1
 PROJECT = mbed_simple
-COMPILE_SYS_ARCH = 0
+COMPILE_SYS_ARCH = 1
 
 ifdef USE_LLILUM_OS_ABSTRACTION_STATIC_OBJECT
 ifeq ($(DEBUG), 1)
@@ -64,17 +64,28 @@ endif
 ###################
 
 # Common settings
-MBED_LIBS = $(LLILUM_ROOT)Zelig
-MBED_ROOT = $(LLILUM_ROOT)Zelig\mbed
-SOURCE_ROOT = $(LLILUM_ROOT)Zelig\Zelig\Test\mbed\SimpleSDK\Native
-LIBRARIES += -lmbed
-LD_SYS_LIBS = -lstdc++ -lsupc++ -lm -lc -lgcc -lnosys
+MBED_LIBS     = $(LLILUM_ROOT)Zelig
+MBED_ROOT     = $(LLILUM_ROOT)Zelig\mbed
+SOURCE_ROOT   = $(LLILUM_ROOT)Zelig\Zelig\Test\mbed\SimpleSDK\Native
+LIBRARIES    += -lmbed
+LD_SYS_LIBS   = -lstdc++ -lsupc++ -lm -lc -lgcc -lnosys
 INCLUDE_PATHS = -I. -I$(MBED_ROOT) -I$(LLILUM_ROOT)Zelig\os_layer\inc -I$(LLILUM_ROOT)Zelig\os_layer\inc\api -I$(LLILUM_ROOT)Zelig\os_layer\inc\api\io -I$(LLILUM_ROOT)Zelig\os_layer\inc\hal
 
 #
 # LWIP Compilation and Libraries
 #
 ifeq ($(USE_LWIP), 1)
+
+# Define lwIP debug flags to build sys_arch libs for both checked and debug builds
+ifeq ($(LWIP_DEBUG), 1)
+	CC_FLAGS  += -DLWIP_DEBUG
+	LIBRARIES += -llwIPd
+else ifeq ($(LWIP_DEBUG), 2)
+	CC_FLAGS  += -DLWIP_DEBUG
+	LIBRARIES += -llwIPc
+else
+	LIBRARIES += -llwIP
+endif
 
 # Adaptation layer
 ifeq ($(COMPILE_SYS_ARCH),1)
@@ -92,7 +103,8 @@ OBJECTS += \
 ifeq ($(TARGET),K64F)
 	# Ethernet controller
     # NOTE: mbed lib is in the back. Order matters, and it needs to be referenced after the lwip libs
-	LIBRARIES += -lmbedeth -llwIPeth -llwIP -lmbed
+	LIBRARIES += -lmbedeth -llwIPeth -lmbed
+	
 endif
 
     LIBRARY_PATHS += -L$(MBED_LIBS)/lwip/lwip/lib
@@ -118,6 +130,9 @@ else
 	CC_FLAGS += -D__HEAP_SIZE=$(HEAP_SIZE)
 endif
 
+#
+# Override defautl stack size for LPC1768 where teh total available RAM is only 32KB
+#
 ifeq ($(DEBUG), 1)
 	CC_FLAGS += -D__DEFAULT_STACK_SIZE=0x800
 endif
@@ -311,7 +326,9 @@ endif
 
 .PHONY: all clean lst size
 
-all: ${TARGET} $(TARGET)\$(PROJECT).bin $(TARGET)\$(PROJECT).hex $(TARGET)\$(PROJECT).lst $(TARGET)\$(PROJECT).disasm size
+all: ${TARGET} $(TARGET)\$(PROJECT).bin $(TARGET)\$(PROJECT).hex size
+
+dumps: ${TARGET} $(TARGET)\$(PROJECT).lst $(TARGET)\$(PROJECT).disasm
 
 # Conditionals (ifeq/ifneq) are bugged on Windows. Instead, we'll just ensure the directory exists and remove it unconditionally.
 cleanclean: ${TARGET}
@@ -376,3 +393,4 @@ $(TARGET)\$(PROJECT).disasm: $(TARGET)\$(PROJECT).elf
 size: $(TARGET)\$(PROJECT).elf
 	@echo Size report...
 	$(SIZE) $<
+
